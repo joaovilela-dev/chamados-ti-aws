@@ -1,0 +1,3 @@
+pytest
+moto[dynamodb,sns,sqs]
+boto3

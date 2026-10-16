@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: API de chamados de TI (projeto de estudo) - API Gateway + Lambda + DynamoDB + SNS
+
+Parameters:
+  EmailAlertas:
+    Type: String
+    Default: ""
+    Description: E-mail que recebe aviso quando um chamado CRITICO e aberto (opcional; deixe vazio para nao criar a assinatura)
+
+Conditions:
+  TemEmail: !Not [!Equals [!Ref EmailAlertas, ""]]
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+    MemorySize: 128
+    CodeUri: src/
+    Environment:
+      Variables:
+        TABELA_CHAMADOS: !Ref TabelaChamados
+        TOPICO_ALERTAS: !Ref TopicoAlertas
+
+Resources:
+  # --- Banco de dados: DynamoDB sob demanda (paga por uso, sem servidor para gerenciar)
+  TabelaChamados:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+  # --- Notificacao: SNS (topico de alertas para chamados criticos)
+  TopicoAlertas:
+    Type: AWS::SNS::Topic
+
+  AssinaturaEmail:
+    Type: AWS::SNS::Subscription
+    Condition: TemEmail
+    Properties:
+      TopicArn: !Ref TopicoAlertas
+      Protocol: email
+      Endpoint: !Ref EmailAlertas
+
+  # --- API HTTP com limite de requisicoes (a API e publica e sem login: o limite reduz abuso)
+  ChamadosApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+
+  # --- Funcoes: cada uma recebe SO a permissao de que precisa (principio do menor privilegio)
+  CriarChamadoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: criar_chamado.handler
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref TabelaChamados
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt TopicoAlertas.TopicName
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ChamadosApi
+            Path: /chamados
+            Method: POST
+
+  ListarChamadosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: listar_chamados.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TabelaChamados
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ChamadosApi
+            Path: /chamados
+            Method: GET
+
+  BuscarChamadoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: buscar_chamado.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TabelaChamados
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ChamadosApi
+            Path: /chamados/{id}
+            Method: GET
+
+  AtualizarStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: atualizar_status.handler
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref TabelaChamados
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ChamadosApi
+            Path: /chamados/{id}/status
+            Method: PATCH
+
+Outputs:
+  ApiUrl:
+    Description: URL base da API
+    Value: !Sub "https://${ChamadosApi}.execute-api.${AWS::Region}.amazonaws.com"
+  Tabela:
+    Description: Nome da tabela DynamoDB
+    Value: !Ref TabelaChamados
