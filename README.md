@@ -53,14 +53,24 @@ curl "$API/chamados/<id>"
 curl -X PATCH "$API/chamados/<id>/status" -H "Content-Type: application/json" -d '{"status":"em_andamento"}'
 ```
 
-No Windows (PowerShell), prefira o Postman ou o `Invoke-RestMethod`, pois as aspas do curl funcionam diferente.
+No Windows (PowerShell), as aspas do `curl` funcionam diferente. Use o `Invoke-RestMethod`:
+
+```powershell
+$API = "https://SEU-ID.execute-api.REGIAO.amazonaws.com"
+$corpo = @{ titulo="Impressora sem toner"; descricao="Setor financeiro sem impressao"; setor="Financeiro"; solicitante="Maria Teste"; prioridade="alta" } | ConvertTo-Json
+$chamado = Invoke-RestMethod -Method Post -Uri "$API/chamados" -ContentType "application/json" -Body $corpo
+Invoke-RestMethod "$API/chamados/$($chamado.id)"
+Invoke-RestMethod -Method Patch -Uri "$API/chamados/$($chamado.id)/status" -ContentType "application/json" -Body (@{status="em_andamento"} | ConvertTo-Json)
+```
+
+Prefira textos sem acento nos exemplos de PowerShell, para evitar problemas de codificação.
 
 ## Testar localmente (sem AWS)
 
 Os testes usam o `moto`, que simula DynamoDB, SNS e SQS em memória. Nada é criado na AWS.
 
 ```bash
-python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate     # Windows: py -3.12 -m venv .venv e depois .venv\Scripts\activate
 pip install -r requirements-dev.txt
 python -m pytest -q
 ```
@@ -74,20 +84,26 @@ python -m pytest -q
 2. **Não use a conta raiz.** Crie um usuário IAM (ou use o IAM Identity Center) com MFA e configure
    o CLI com `aws configure`. O SAM precisa de permissões amplas (CloudFormation, IAM, Lambda, API
    Gateway, DynamoDB, SNS, S3). Para estudo, um usuário dedicado costuma receber `AdministratorAccess`,
-   o que é prático mas **amplo demais para uso profissional**; esteja pronto para explicar isso.
+   o que é prático mas **amplo demais para uso profissional**: em um projeto real, eu restringiria as permissões ao mínimo necessário.
 3. Compile e faça o deploy:
    ```bash
    sam build
    sam deploy --guided
    ```
    Respostas sugeridas: nome da stack `chamados-ti`; região de sua escolha; `EmailAlertas` com o seu
-   e-mail (ou vazio); aceitar a criação de roles IAM; salvar a configuração em `samconfig.toml`.
+   e-mail completo (ou vazio; o SAM não valida o formato, então confira o valor antes de confirmar o deploy); aceitar a criação de roles IAM; salvar a configuração em `samconfig.toml`.
    O SAM avisará que as rotas não têm autenticação: para este estudo responda `y`.
 4. Ao final, o terminal mostra `ApiUrl`. Se informou e-mail, **confirme a assinatura** no link que o SNS enviar.
 5. Teste as rotas com os exemplos acima e abra um chamado `critica` para receber o alerta por e-mail.
 6. Veja os logs: `sam logs -n CriarChamadoFunction --stack-name chamados-ti --tail` ou pelo console (CloudWatch).
-7. **Tire prints** do console (stack, tabela com itens, logs) e da API respondendo: serão sua prova na dinâmica.
-8. **Quando terminar de usar, apague tudo:** `sam delete --stack-name chamados-ti`
+7. Confira no console (stack, tabela com itens, logs) que os recursos foram criados e a API responde.
+8. **Quando terminar de usar, apague tudo:**
+   ```bash
+   sam delete --stack-name chamados-ti
+   ```
+   O Lambda cria os grupos de log no CloudWatch fora da stack, então o `sam delete` não os remove.
+   Apague também os grupos `/aws/lambda/chamados-ti-*` (CloudWatch → Logs → Grupos de logs).
+   A stack `aws-sam-cli-managed-default`, criada pelo próprio SAM para guardar o código enviado, pode ficar: o custo é desprezível.
 
 ## Custos
 
@@ -96,7 +112,13 @@ Este projeto usa serviços de custo muito baixo em uso de estudo (Lambda, API Ga
 SNS e CloudWatch). Mesmo assim: configure o alerta de orçamento, não faça upgrade para o plano Paid
 e apague a stack quando não precisar mais. Confira os preços atuais na página de cada serviço.
 
-## Decisões e trade-offs (para explicar na entrevista)
+## Validação
+
+Além dos testes automatizados com serviços simulados, a stack foi publicada em uma conta AWS real
+(`us-east-2`): as quatro rotas, os códigos 400/404 e o alerta por e-mail de um chamado crítico foram
+verificados manualmente e os logs conferidos no CloudWatch. Depois, a stack foi removida.
+
+## Decisões e trade-offs
 
 - **Serverless (Lambda):** não há servidor para gerenciar e o custo é por uso. Combina com um
   sistema de chamados, que tem tráfego irregular.
@@ -119,15 +141,7 @@ e apague a stack quando não precisar mais. Confira os preços atuais na página
 - Sem pipeline de deploy automático (próximo passo: GitHub Actions).
 - Sem alarmes no CloudWatch (próximo passo: alarme de erros nas funções).
 - Sem frontend (opcional: página simples em S3).
-- Os testes cobrem a lógica com serviços simulados; não há teste de integração contra a AWS real.
-
-## O que dizer (e o que não dizer) depois de concluir
-
-Pode dizer, se você fez o deploy e entende cada parte: *"Construí e publiquei uma API serverless na AWS
-(API Gateway, Lambda, DynamoDB, SNS, IAM e CloudWatch) usando AWS SAM."*
-
-Evite dizer: "tenho experiência com AWS em produção", "configurei CI/CD" ou "usei Cognito" se isso não for verdade.
-A honestidade protege você: quem entrevista costuma perguntar um nível abaixo do que o candidato afirma.
+- Os testes automatizados usam serviços simulados (moto); a verificação contra a AWS real foi manual, sem teste de integração automatizado.
 
 ## Estrutura
 
@@ -139,8 +153,9 @@ src/listar_chamados.py   # GET    /chamados
 src/buscar_chamado.py    # GET    /chamados/{id}
 src/atualizar_status.py  # PATCH  /chamados/{id}/status
 tests/                   # testes com moto
+LICENSE                  # MIT
 ```
 
 ## Licença
 
-MIT
+MIT (veja o arquivo `LICENSE`).
