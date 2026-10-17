@@ -118,6 +118,40 @@ Além dos testes automatizados com serviços simulados, a stack foi publicada em
 (`us-east-2`): as quatro rotas, os códigos 400/404 e o alerta por e-mail de um chamado crítico foram
 verificados manualmente e os logs conferidos no CloudWatch. Depois, a stack foi removida.
 
+## Evidências do deploy
+
+Prints do deploy real em `us-east-2`, com os identificadores da conta omitidos.
+
+**Rotas no API Gateway**
+
+![Rotas da API](docs/04-api-rotas.png)
+
+**Stack no CloudFormation e seus 17 recursos**
+
+![Stack](docs/02-stack-cloudformation.png)
+![Recursos, parte 1](docs/03-recursos-1.png)
+![Recursos, parte 2](docs/03-recursos-2.png)
+
+**As 4 funções Lambda (Python 3.12)**
+
+![Funções Lambda](docs/05-lambda-funcoes.png)
+
+**Menor privilégio: criar só escreve, listar só lê**
+
+![Permissões da função de criar](docs/06-permissoes-criar-escrita.png)
+![Permissões da função de listar](docs/07-permissoes-listar-leitura.png)
+
+**Chamados gravados no DynamoDB**
+
+![Itens da tabela](docs/08-dynamodb-itens.png)
+
+**Logs no CloudWatch**
+
+![Logs](docs/09-logs-cloudwatch.png)
+
+**Alerta por e-mail de um chamado crítico**
+
+![Alerta por e-mail](docs/11-alerta-email.png)
 ## Decisões e trade-offs
 
 - **Serverless (Lambda):** não há servidor para gerenciar e o custo é por uso. Combina com um
