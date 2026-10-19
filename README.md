@@ -89,21 +89,11 @@ Precisa de uma conta AWS, do AWS CLI v2, do AWS SAM CLI e do Python 3.12 (ou do 
 
 1. Criei a conta no plano Free e, antes de qualquer outra coisa, um alerta de orçamento de US$ 5.
 2. Não usei a conta raiz no terminal. Criei um usuário IAM só para isso e configurei com `aws configure`. Dei a ele `AdministratorAccess`, que é prático para estudo, mas amplo demais para um projeto de verdade.
-3. Compilei e fiz o deploy:
-```bash
-   sam build
-   sam deploy --guided
-```
-   Nome da stack `chamados-ti`, região `us-east-2`, `EmailAlertas` com o meu e-mail, aceitei a criação das roles e salvei a configuração em `samconfig.toml`. O SAM avisa que as rotas não têm autenticação, e para este estudo respondi `y`.
+3. Compilei com `sam build` e fiz o deploy com `sam deploy --guided`. Nome da stack `chamados-ti`, região `us-east-2`, `EmailAlertas` com o meu e-mail, aceitei a criação das roles e salvei a configuração em `samconfig.toml`. O SAM avisa que as rotas não têm autenticação, e para este estudo respondi `y`.
 4. No fim o terminal mostra o `ApiUrl`. Confirmei a assinatura do SNS no e-mail que chegou.
 5. Testei as quatro rotas e abri um chamado `critica` para receber o alerta.
 6. Olhei os logs com `sam logs -n CriarChamadoFunction --stack-name chamados-ti --tail` e também pelo console.
-7. Apaguei tudo:
-```bash
-   sam delete --stack-name chamados-ti
-```
-   O `sam delete` não remove os grupos de log do CloudWatch, porque o Lambda os cria fora da stack. Apaguei na mão os grupos `/aws/lambda/chamados-ti-*`. A stack `aws-sam-cli-managed-default`, que o próprio SAM cria para guardar o código enviado, deixei lá. O custo dela é desprezível.
-
+7. Apaguei tudo com `sam delete --stack-name chamados-ti`. O `sam delete` não remove os grupos de log do CloudWatch, porque o Lambda os cria fora da stack. Apaguei na mão os grupos `/aws/lambda/chamados-ti-*`. A stack `aws-sam-cli-managed-default`, que o próprio SAM cria para guardar o código enviado, deixei lá. O custo dela é desprezível.
 ## O que deu errado no caminho
 
 - **Python:** eu tinha o 3.10 e o Lambda usa 3.12. Instalei o 3.12 e criei o ambiente virtual com `py -3.12 -m venv .venv`.
